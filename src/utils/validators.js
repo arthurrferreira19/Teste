@@ -1,0 +1,14 @@
+const ALLOWED_ROLES = ["ADMIN", "USER", "RESPONSAVEL"];
+
+const TICKET_STATUS = [
+  "Pendente",
+  "Em Andamento",
+  "Aguardando Solicitante",
+  "Aguardando Fornecedor",
+  "Concluído",
+  "Pausado"
+];
+
+const TICKET_PRIORITIES = ["Baixa", "Média", "Alta"];
+
+module.exports = { ALLOWED_ROLES, TICKET_STATUS, TICKET_PRIORITIES };
