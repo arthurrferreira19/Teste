@@ -1,7 +1,9 @@
 require("dotenv").config();
+const http = require("http");
 const { connectDB } = require("./src/config/db");
 const app = require("./src/app");
 const { ensureAdminSeed } = require("./src/services/seedService");
+const { initSocket } = require("./src/socket");
 
 (async () => {
   try {
@@ -10,7 +12,10 @@ const { ensureAdminSeed } = require("./src/services/seedService");
 
     const PORT = process.env.PORT || 3000;
 
-    app.listen(PORT, "0.0.0.0", () => {
+    const server = http.createServer(app);
+    initSocket(server);
+
+    server.listen(PORT, "0.0.0.0", () => {
       console.log("Running on", PORT);
     });
   } catch (err) {

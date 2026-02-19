@@ -12,6 +12,7 @@ const adminRoutes = require("./routes/adminRoutes");
 const sectorRoutes = require("./routes/sectorRoutes");
 const userRoutes = require("./routes/userRoutes");
 const ticketRoutes = require("./routes/ticketRoutes");
+const chatRoutes = require("./routes/chatRoutes");
 
 const app = express();
 
@@ -38,7 +39,7 @@ app.use(
         fontSrc: ["'self'", "data:", "https://cdn.jsdelivr.net"],
 
         // ✅ Para sourcemaps / requests do unpkg/jsdelivr
-        connectSrc: ["'self'", "https://cdn.jsdelivr.net", "https://unpkg.com"]
+        connectSrc: ["'self'", "ws:", "wss:", "https://cdn.jsdelivr.net", "https://unpkg.com"]
       }
     }
   })
@@ -57,6 +58,7 @@ app.use(express.static(publicPath));
 app.use("/assets", express.static(path.join(publicPath, "assets")));
 app.use("/admin", express.static(path.join(publicPath, "admin")));
 app.use("/user", express.static(path.join(publicPath, "user")));
+app.use("/uploads", express.static(path.join(__dirname, "..", "uploads")));
 
 /** (Opcional) silenciar log do Chrome DevTools */
 app.get("/.well-known/appspecific/com.chrome.devtools.json", (req, res) => res.status(204).end());
@@ -73,6 +75,7 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/sectors", sectorRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/tickets", ticketRoutes);
+app.use("/api/chat", chatRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

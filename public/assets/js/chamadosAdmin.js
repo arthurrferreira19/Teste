@@ -458,5 +458,12 @@ async function sendUpdate() {
   loadRespFilter();
 
   loadTable();
+
+  // se veio do chat com ?open=<ticketId>, abre detalhes automaticamente
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const openId = params.get("open");
+    if (openId) setTimeout(() => openDetails(openId).catch(() => {}), 250);
+  } catch {}
   if (window.lucide) window.lucide.createIcons();
 })();
