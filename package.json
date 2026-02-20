@@ -3,6 +3,10 @@
   "version": "1.0.0",
   "description": "Maximum Help - Sistema interno de chamados (Admin Login + Dashboard)",
   "main": "server.js",
+  "engines": {
+    "node": "20.x",
+    "npm": "10.x"
+  },
   "scripts": {
     "dev": "nodemon server.js",
     "start": "node server.js"
