@@ -626,3 +626,327 @@ body{
 .mh-chat-ticket .title{ font-weight: 900; }
 .mh-chat-ticket .sub{ font-size: 12px; color: var(--muted); }
 
+
+
+/* =========================
+   Chamados • Lista + Quadro (Trello-like)
+   ========================= */
+.ticket-card { position: relative; }
+.ticket-desc { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.ticket-urgent { border: 1px solid rgba(220,53,69,.35) !important; box-shadow: 0 12px 30px rgba(220,53,69,.12) !important; }
+.ticket-urgent::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 22px;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 1px rgba(220,53,69,.18);
+}
+.urgent-clock{
+  position:absolute;
+  top:14px;
+  right:14px;
+  width:34px;
+  height:34px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:999px;
+  background: rgba(220,53,69,.10);
+  border: 1px solid rgba(220,53,69,.20);
+}
+.mh-badge{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:6px 10px;
+  border-radius:999px;
+  font-size:.78rem;
+  font-weight:600;
+}
+.badge-soft{ background:#f3f4f6; border:1px solid #e6e7ea; color:#111827; }
+.badge-soft-info{ background:#eef6ff; border:1px solid #dbeafe; color:#1e3a8a; }
+.badge-soft-warn{ background:#fff7ed; border:1px solid #ffedd5; color:#9a3412; }
+.badge-soft-ok{ background:#ecfdf5; border:1px solid #d1fae5; color:#065f46; }
+.badge-urgent{ background: rgba(220,53,69,.12); border:1px solid rgba(220,53,69,.22); color:#b42318; }
+
+.board-wrap{
+  display:flex;
+  gap:14px;
+  overflow:auto;
+  padding: 6px 2px 14px;
+}
+.board-col{
+  min-width: 290px;
+  max-width: 340px;
+  flex: 0 0 auto;
+  background: #fbfbfc;
+  border: 1px solid #ececf0;
+  border-radius: 20px;
+  padding: 12px;
+}
+.board-col-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  font-weight:700;
+  margin-bottom: 10px;
+}
+.board-col-body{
+  min-height: 140px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+.board-card{
+  position: relative;
+  background: #fff;
+  border: 1px solid #eef0f3;
+  border-radius: 16px;
+  padding: 12px;
+  cursor: grab;
+  transition: transform .12s ease, box-shadow .12s ease;
+}
+.board-card:active { cursor: grabbing; transform: scale(.99); }
+.board-card:hover { box-shadow: 0 10px 26px rgba(17,24,39,.08); transform: translateY(-1px); }
+.line-clamp-2{ display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+
+.chip-link{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding: 8px 10px;
+  border-radius: 999px;
+  background:#fff;
+  border:1px solid #eef0f3;
+  color:#111827;
+  text-decoration:none;
+  font-size:.85rem;
+}
+.chip-link:hover{ border-color:#d6d8dd; transform: translateY(-1px); }
+
+.pre-wrap{ white-space: pre-wrap; }
+
+
+/* Kanban (Trello-like) drag states */
+.kanban-ghost{ opacity:.55; }
+.kanban-chosen{ box-shadow: 0 18px 40px rgba(17,24,39,.12) !important; transform: rotate(0.5deg); }
+.kanban-drag{ cursor: grabbing !important; }
+.board-col-body{ padding-bottom: 8px; }
+.board-card{ user-select: none; }
+
+/* Cards (lista) — visual mais moderno */
+.soft-card.ticket-card{
+  border-radius: 22px;
+  padding: 18px 18px 16px;
+  border: 1px solid rgba(17,24,39,.06);
+  background: linear-gradient(180deg,#ffffff 0%, #fbfbfc 100%);
+}
+.soft-card.ticket-card h5{ font-weight: 900; letter-spacing: -.2px; }
+.soft-card.ticket-card .ticket-desc{ font-size: .95rem; line-height: 1.35rem; }
+.soft-card.ticket-card:hover{ transform: translateY(-2px); box-shadow: 0 16px 40px rgba(17,24,39,.10); }
+
+.board-col{
+  background: linear-gradient(180deg,#fbfbfc 0%, #f7f7fa 100%);
+}
+.board-col-head{ font-size:.95rem; }
+.board-card{
+  padding: 12px 12px 10px;
+}
+.board-card .fw-semibold{ font-weight: 800 !important; }
+
+.kanban-wrap{ display:flex; gap:14px; overflow:auto; padding: 6px 2px 14px; }
+
+
+/* ===== Chamados Kanban: drag handle ===== */
+.board-card{position:relative;}
+.drag-handle{position:absolute;top:10px;right:10px;border:0;background:transparent;color:inherit;opacity:.55;cursor:grab;padding:2px;border-radius:10px;}
+.drag-handle:hover{opacity:1;background:rgba(128,0,0,.06);} 
+.kanban-ghost{opacity:.35;}
+.kanban-chosen{transform:scale(1.01);} 
+
+
+
+/* === Chamados (Lista) - Card refinado (v12) === */
+.tickets-grid{
+  display:grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 14px;
+}
+.ticket-card{
+  grid-column: span 6;
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, .08);
+  border-radius: 16px;
+  padding: 14px 14px 12px 14px;
+  box-shadow: 0 10px 24px rgba(15,23,42,.06);
+  transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+@media (max-width: 1200px){ .ticket-card{ grid-column: span 12; } }
+.ticket-card:hover{
+  transform: translateY(-2px);
+  box-shadow: 0 16px 36px rgba(15,23,42,.10);
+  border-color: rgba(15, 23, 42, .14);
+}
+.ticket-card.is-urgent{
+  border-color: rgba(185, 28, 28, .45);
+  box-shadow: 0 16px 36px rgba(185, 28, 28, .10);
+}
+.ticket-card.is-urgent::after{
+  content:"";
+  position:absolute;
+  top:0; left:0;
+  width:100%;
+  height:4px;
+  background: rgba(185, 28, 28, .85);
+}
+.ticket-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom: 8px;
+}
+.badge-status{
+  background: rgba(127, 29, 29, .08);
+  color: #7f1d1d;
+  border: 1px solid rgba(127, 29, 29, .14);
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+.urgent-chip{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  background: rgba(185, 28, 28, .08);
+  color:#991b1b;
+  border:1px solid rgba(185, 28, 28, .18);
+  font-weight: 600;
+}
+.ticket-title{
+  font-weight: 800;
+  color:#0f172a;
+  font-size: 15px;
+  line-height: 1.2;
+  margin-bottom: 6px;
+}
+.ticket-desc{
+  color:#334155;
+  font-size: 13px;
+  line-height: 1.45;
+  min-height: 36px;
+}
+.ticket-meta{
+  display:flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  color:#475569;
+  font-size: 12px;
+}
+.ticket-meta .k{ color:#64748b; font-weight: 700; margin-right: 4px; }
+.ticket-foot{
+  display:flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(15,23,42,.10);
+}
+.ticket-actions{
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+.icon-btn{
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  border: 1px solid rgba(15,23,42,.10);
+  background: rgba(248,250,252, .9);
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  transition: transform .12s ease, background .12s ease, border-color .12s ease;
+}
+.icon-btn:hover{
+  transform: translateY(-1px);
+  background: #fff;
+  border-color: rgba(15,23,42,.18);
+}
+.icon-btn.danger{
+  border-color: rgba(185, 28, 28, .20);
+}
+.icon-btn.danger:hover{
+  border-color: rgba(185, 28, 28, .35);
+}
+.muted{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  color:#64748b;
+  font-size: 12px;
+}
+.mini-btn{
+  border: 1px solid rgba(15,23,42,.10);
+  background: #fff;
+  color:#0f172a;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  transition: background .12s ease, border-color .12s ease;
+}
+.mini-btn:hover{
+  background: rgba(127, 29, 29, .06);
+  border-color: rgba(127, 29, 29, .16);
+}
+.chip{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding: 8px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(15,23,42,.10);
+  background: rgba(248,250,252,.9);
+  margin: 4px 6px 0 0;
+  font-size: 12px;
+}
+/* detalhes */
+.details-grid{
+  display:grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 12px;
+}
+.details-item{
+  grid-column: span 6;
+  background: rgba(248,250,252,.9);
+  border: 1px solid rgba(15,23,42,.08);
+  border-radius: 14px;
+  padding: 10px 12px;
+}
+.details-item.wide{ grid-column: span 12; }
+.details-item .lbl{ font-size: 12px; color:#64748b; font-weight: 800; margin-bottom: 4px; }
+.details-item .val{ font-size: 13px; color:#0f172a; }
+.details-item .val.pre{ white-space: pre-wrap; }
+.attach-row{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(15,23,42,.08);
+  background: #fff;
+  text-decoration:none;
+  color:#0f172a;
+  margin-top: 8px;
+}
+.attach-row:hover{ background: rgba(127, 29, 29, .05); }

@@ -86,7 +86,7 @@ async function resolveSectorByResponsavelOrPayload(responsavelId, setorId) {
     if (resp.setor) return resp.setor;
 
     // fallback (caso alguém não tenha setor)
-    if (!setorId) throw new HttpError(400, "Setor é obrigatório quando o responsável não possui setor");
+    if (!setorId) return null;
     const sec = await validateSector(setorId);
     return sec._id;
 }
@@ -95,20 +95,21 @@ async function resolveSectorByResponsavelOrPayload(responsavelId, setorId) {
 async function create(payload) {
     const {
         titulo,
+        solicitanteAberto,
         descricao,
         prioridade,
         urgente,
         status,
+        prazoDias,
         dataInicio,
         dataFim,
         solicitante,
         responsavel,
-        setor
+        setor,
+        anexos
     } = payload;
 
-    if (!titulo || !descricao) throw new HttpError(400, "Informe título e descrição");
-    if (!dataInicio || !dataFim) throw new HttpError(400, "Informe data de início e fim");
-    if (!solicitante || !responsavel) throw new HttpError(400, "Informe solicitante e responsável");
+        if (!solicitante || !responsavel) throw new HttpError(400, "Informe solicitante e responsável");
 
     validateEnums({ status, prioridade });
 
@@ -116,16 +117,19 @@ async function create(payload) {
     const setorFinal = await resolveSectorByResponsavelOrPayload(responsavel, setor);
 
     const ticket = await Ticket.create({
-        titulo: String(titulo).trim(),
-        descricao: String(descricao).trim(),
+        titulo: String(titulo || "Sem título").trim(),
+        solicitanteAberto: String(solicitanteAberto || "").trim(),
+        descricao: String(descricao || "").trim(),
         prioridade: prioridade || "Média",
         urgente: !!urgente,
         status: status || "Pendente",
-        dataInicio: new Date(dataInicio),
-        dataFim: new Date(dataFim),
+        prazoDias: (typeof prazoDias === "number" && !Number.isNaN(prazoDias)) ? prazoDias : (prazoDias === null ? null : undefined),
+        dataInicio: dataInicio ? new Date(dataInicio) : new Date(),
+        dataFim: dataFim ? new Date(dataFim) : undefined,
         solicitante,
         responsavel,
         setor: setorFinal,
+        anexos: Array.isArray(anexos) ? anexos : [],
         atualizacoes: []
     });
 
@@ -139,10 +143,12 @@ async function update(id, payload) {
 
     const {
         titulo,
+        solicitanteAberto,
         descricao,
         prioridade,
         urgente,
         status,
+        prazoDias,
         dataInicio,
         dataFim,
         solicitante,
@@ -153,6 +159,7 @@ async function update(id, payload) {
     validateEnums({ status, prioridade });
 
     if (titulo !== undefined) ticket.titulo = String(titulo).trim();
+    if (solicitanteAberto !== undefined) ticket.solicitanteAberto = String(solicitanteAberto || '').trim();
     if (descricao !== undefined) ticket.descricao = String(descricao).trim();
     if (prioridade !== undefined) ticket.prioridade = prioridade;
     if (urgente !== undefined) ticket.urgente = !!urgente;
@@ -241,10 +248,23 @@ async function listByResponsavel(userId, query) {
     return tickets;
 }
 
+
+async function addAttachments(id, anexos) {
+    if (!isValidId(id)) throw new HttpError(400, "ID inválido");
+    const ticket = await Ticket.findById(id);
+    if (!ticket) throw new HttpError(404, "Chamado não encontrado");
+
+    ticket.anexos = [...(ticket.anexos || []), ...(Array.isArray(anexos) ? anexos : [])];
+    await ticket.save();
+
+    return getById(ticket._id);
+}
+
 module.exports = {
     list,
     getById,
     create,
+    addAttachments,
     update,
     updateStatus,
     remove,

@@ -1,469 +1,411 @@
-const STATUS = [
-  "Pendente",
-  "Em Andamento",
-  "Aguardando Solicitante",
-  "Aguardando Fornecedor",
-  "Concluído",
-  "Pausado"
-];
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
 
-let modalTicket, modalDetails, modalDelete;
-let currentDetailsId = null;
-
-function esc(s) {
-  return String(s || "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-function showAlert(id, type, msg) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  if (!msg) { el.innerHTML = ""; return; }
-  el.innerHTML = `
-    <div class="alert alert-${type} fade-in" role="alert" style="border-radius:16px;">
-      ${msg}
-    </div>
-  `;
-}
-
-function setSaving(v) {
-  const btn = document.getElementById("btnSave");
-  const spin = document.getElementById("btnSaveSpin");
-  const text = document.getElementById("btnSaveText");
-  btn.disabled = v;
-  spin.classList.toggle("d-none", !v);
-  text.textContent = v ? "Salvando..." : "Salvar";
-}
-
-function badgeStatus(status) {
-  const map = {
-    "Concluído": "text-bg-success",
-    "Em Andamento": "text-bg-primary",
-    "Pendente": "text-bg-secondary",
-    "Pausado": "text-bg-warning",
-    "Aguardando Solicitante": "text-bg-dark",
-    "Aguardando Fornecedor": "text-bg-info"
-  };
-  return `<span class="badge ${map[status] || "text-bg-secondary"}" style="border-radius:999px;">${esc(status)}</span>`;
-}
-
-function badgeUrgente(u) {
-  return u
-    ? `<span class="badge text-bg-danger" style="border-radius:999px;">Sim</span>`
-    : `<span class="badge text-bg-secondary" style="border-radius:999px;">Não</span>`;
-}
-
-function fillStatusSelect(selectId, includeAll = false) {
-  const sel = document.getElementById(selectId);
-  sel.innerHTML = (includeAll ? `<option value="">Todos</option>` : "") + STATUS.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join("");
-}
-
-function todayISO() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-async function loadSectorsFilter() {
-  const sel = document.getElementById("filterSetor");
-  try {
-    const sectors = await API.request("/api/sectors?ativo=true", { method: "GET" });
-    sel.innerHTML = `<option value="">Todos</option>` + sectors.map(s => `<option value="${s._id}">${esc(s.nome)}</option>`).join("");
-  } catch {
-    sel.innerHTML = `<option value="">Todos</option>`;
+  function fmtDate(d) {
+    if (!d) return "-";
+    try { return new Date(d).toLocaleDateString("pt-BR"); } catch { return "-"; }
   }
-}
-
-async function loadRespFilter() {
-  // Usa /api/users com filtro role. Juntamos ADMIN + RESPONSAVEL.
-  const sel = document.getElementById("filterResp");
-  try {
-    const r1 = await API.request("/api/users?role=RESPONSAVEL", { method: "GET" });
-    const r2 = await API.request("/api/users?role=ADMIN", { method: "GET" });
-    const all = [...r1, ...r2].filter(u => u.ativo);
-
-    sel.innerHTML = `<option value="">Todos</option>` + all.map(u => `<option value="${u._id}">${esc(u.nome)} • ${esc(u.role)}</option>`).join("");
-  } catch {
-    sel.innerHTML = `<option value="">Todos</option>`;
+  function escapeHtml(str) {
+    return String(str || "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
   }
-}
+  function setAlert(type, msg) {
+    const el = $("pageAlert");
+    if (!el) return;
+    if (!msg) { el.classList.add("d-none"); el.innerHTML = ""; return; }
+    el.className = `alert alert-${type} d-flex align-items-start gap-2`;
+    el.innerHTML = `<i data-lucide="${type === "danger" ? "alert-triangle" : "info"}" style="width:18px;height:18px;"></i>
+      <div>${escapeHtml(msg)}</div>`;
+    el.classList.remove("d-none");
+    try { lucide.createIcons(); } catch {}
+  }
 
-async function loadModalOptions() {
-  // responsável
-  const selR = document.getElementById("responsavel");
-  // setores
-  const selS = document.getElementById("setor");
+  let TICKETS = [];
+  let USERS = [];
+  let SECTORS = [];
+  let CURRENT_ID = null;
 
-  const [r1, r2, sectors] = await Promise.all([
-    API.request("/api/users?role=RESPONSAVEL", { method: "GET" }).catch(() => []),
-    API.request("/api/users?role=ADMIN", { method: "GET" }).catch(() => []),
-    API.request("/api/sectors?ativo=true", { method: "GET" }).catch(() => [])
-  ]);
+  let modalTicket, modalDetails;
 
-  const responsaveis = [...r1, ...r2].filter(u => u.ativo);
+  const q = $("q");
+  const statusFilter = $("statusFilter");
+  const urgFilter = $("urgFilter");
+  const btnRefresh = $("btnRefresh");
+  const btnOpenCreate = $("btnOpenCreate");
 
-  selR.innerHTML = `<option value="">Selecione...</option>` + responsaveis.map(u => `
-    <option value="${u._id}" data-setor="${u.setor?._id || ""}">
-      ${esc(u.nome)} • ${esc(u.role)} • ${esc(u.email)}
-    </option>
-  `).join("");
+  const ticketsGrid = $("ticketsGrid");
+  const ticketsEmpty = $("ticketsEmpty");
 
-  selS.innerHTML = `<option value="">Selecione...</option>` + sectors.map(s => `<option value="${s._id}">${esc(s.nome)}</option>`).join("");
+  const ticketForm = $("ticketForm");
+  const modalTicketTitle = $("modalTicketTitle");
+  const createErr = $("createErr");
+  const btnSaveTicket = $("btnSaveTicket");
 
-  // auto-fill setor se responsável tiver setor
-  selR.addEventListener("change", () => {
-    const opt = selR.selectedOptions?.[0];
-    const setorId = opt?.getAttribute("data-setor") || "";
-    if (setorId) selS.value = setorId;
-  }, { once: true });
-}
+  const fTitulo = $("fTitulo");
+  const fSolicitanteAberto = $("fSolicitanteAberto");
+  const fDescricao = $("fDescricao");
+  const fStatus = $("fStatus");
+  const fUrgente = $("fUrgente");
+  const fPrazoDias = $("fPrazoDias");
+  const fSolicitanteId = $("fSolicitanteId");
+  const fResponsavelId = $("fResponsavelId");
+  const fSetorId = $("fSetorId");
+  const fFiles = $("fFiles");
+  const selectedFiles = $("selectedFiles");
 
-function resetTicketModal() {
-  document.getElementById("ticketId").value = "";
-  document.getElementById("modalTitle").textContent = "Abrir chamado";
-  document.getElementById("titulo").value = "";
-  document.getElementById("descricao").value = "";
-  document.getElementById("prioridade").value = "Média";
-  document.getElementById("urgente").value = "false";
-  document.getElementById("dataInicio").value = todayISO();
-  document.getElementById("dataFim").value = todayISO();
-  document.getElementById("responsavel").value = "";
-  document.getElementById("setor").value = "";
-  document.getElementById("status").value = "Pendente";
-  showAlert("modalAlert", "", "");
-}
+  const detailsBody = $("detailsBody");
 
-async function loadTable() {
-  const tbody = document.getElementById("tblBody");
-  tbody.innerHTML = `<tr><td colspan="7" style="color:var(--muted);">Carregando...</td></tr>`;
+  document.addEventListener("DOMContentLoaded", async () => {
+    if (!validateTokenOrRedirect()) return;
+    mountSidebar("chamados");
 
-  const search = document.getElementById("search").value.trim();
-  const status = document.getElementById("filterStatus").value;
-  const urgente = document.getElementById("filterUrgente").value;
-  const setor = document.getElementById("filterSetor").value;
-  const responsavel = document.getElementById("filterResp").value;
+    const btnSidebarToggle = $("btnSidebarToggle");
+    if (btnSidebarToggle) btnSidebarToggle.addEventListener("click", () => document.body.classList.toggle("sidebar-collapsed"));
 
-  const qs = new URLSearchParams();
-  if (search) qs.set("search", search);
-  if (status) qs.set("status", status);
-  if (urgente !== "") qs.set("urgente", urgente);
-  if (setor) qs.set("setor", setor);
-  if (responsavel) qs.set("responsavel", responsavel);
+    const btnLogoutTop = $("btnLogoutTop");
+    if (btnLogoutTop) btnLogoutTop.addEventListener("click", () => { API.clearAuth(); window.location.href="/admin/login.html"; });
 
-  try {
-    const tickets = await API.request(`/api/tickets?${qs.toString()}`, { method: "GET" });
+    const mt = $("moduleTitle");
+    if (mt) mt.textContent = "Chamados";
+    const who = $("whoamiTop");
+    const me = API.getUser() || {};
+    if (who) who.textContent = me.nome || me.email || "Admin";
 
-    if (!tickets.length) {
-      tbody.innerHTML = `<tr><td colspan="7" style="color:var(--muted);">Nenhum chamado encontrado</td></tr>`;
+    modalTicket = new bootstrap.Modal($("modalTicket"));
+    modalDetails = new bootstrap.Modal($("modalDetails"));
+
+    bindEvents();
+
+    try {
+      await loadUsersAndSectors();
+      await loadTickets();
+      render();
+    } catch (e) {
+      setAlert("danger", e.message || "Falha ao carregar chamados.");
+    }
+    try { lucide.createIcons(); } catch {}
+  });
+
+  function bindEvents() {
+    if (btnRefresh) btnRefresh.addEventListener("click", async () => { await loadTickets(); render(); });
+    if (btnOpenCreate) btnOpenCreate.addEventListener("click", () => openCreate());
+    [q, statusFilter, urgFilter].forEach((el) => {
+      if (!el) return;
+      el.addEventListener("input", render);
+      el.addEventListener("change", render);
+    });
+    if (btnSaveTicket) btnSaveTicket.addEventListener("click", onSave);
+
+    if (fFiles) fFiles.addEventListener("change", () => {
+      const files = Array.from(fFiles.files || []);
+      if (!selectedFiles) return;
+      selectedFiles.innerHTML = files.length
+        ? files.map(f => `<span class="chip">${escapeHtml(f.name)} <small class="text-muted">(${Math.round(f.size/1024)} KB)</small></span>`).join("")
+        : `<span class="text-muted">Nenhum arquivo selecionado.</span>`;
+    });
+  }
+
+  async function loadUsersAndSectors() {
+    try { USERS = await API.request("/api/users"); } catch { USERS = []; }
+    try { SECTORS = await API.request("/api/sectors"); } catch { SECTORS = []; }
+    fillSelect(fSolicitanteId, USERS, "Selecione o solicitante...");
+    fillSelect(fResponsavelId, USERS, "Selecione o responsável...");
+    fillSelect(fSetorId, SECTORS, "Selecione o setor...", "nome");
+  }
+
+  function fillSelect(selectEl, list, placeholder, labelKey="nome") {
+    if (!selectEl) return;
+    const options = [`<option value="">${escapeHtml(placeholder)}</option>`];
+    (list || []).forEach((item) => {
+      const label = item[labelKey] || item.email || item._id;
+      options.push(`<option value="${item._id}">${escapeHtml(label)}</option>`);
+    });
+    selectEl.innerHTML = options.join("");
+  }
+
+  async function loadTickets() {
+    setAlert(null, null);
+    const data = await API.request("/api/tickets");
+    TICKETS = Array.isArray(data) ? data : (data.items || []);
+  }
+
+  function applyFilters(list) {
+    let out = [...(list || [])];
+    const qq = (q && q.value ? q.value.trim().toLowerCase() : "");
+    const st = statusFilter && statusFilter.value ? statusFilter.value : "";
+    const urg = urgFilter && urgFilter.value ? urgFilter.value : "";
+
+    if (qq) {
+      out = out.filter(t =>
+        String(t.titulo || "").toLowerCase().includes(qq) ||
+        String(t.descricao || "").toLowerCase().includes(qq) ||
+        String(t.solicitanteAberto || "").toLowerCase().includes(qq) ||
+        String((t.solicitante && (t.solicitante.nome || t.solicitante.email)) || "").toLowerCase().includes(qq) ||
+        String((t.responsavel && (t.responsavel.nome || t.responsavel.email)) || "").toLowerCase().includes(qq)
+      );
+    }
+    if (st) out = out.filter(t => String(t.status || "") === st);
+    if (urg === "true") out = out.filter(t => !!t.urgente);
+    if (urg === "false") out = out.filter(t => !t.urgente);
+
+    out.sort((a, b) => {
+      const au = a.urgente ? 1 : 0;
+      const bu = b.urgente ? 1 : 0;
+      if (au !== bu) return bu - au;
+      return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+    });
+    return out;
+  }
+
+  function render() {
+    if (!ticketsGrid) return;
+    const filtered = applyFilters(TICKETS);
+
+    if (!filtered.length) {
+      ticketsGrid.innerHTML = "";
+      if (ticketsEmpty) ticketsEmpty.classList.remove("d-none");
+      try { lucide.createIcons(); } catch {}
       return;
     }
+    if (ticketsEmpty) ticketsEmpty.classList.add("d-none");
 
-    tbody.innerHTML = tickets.map(t => `
-      <tr>
-        <td>
-          <div style="font-weight:900;">${esc(t.titulo)}</div>
-          <div style="color:var(--muted); font-size:12px;">
-            Início: ${new Date(t.dataInicio).toLocaleDateString()} • Fim: ${new Date(t.dataFim).toLocaleDateString()}
+    ticketsGrid.innerHTML = filtered.map(renderCard).join("");
+
+    ticketsGrid.querySelectorAll("[data-action]").forEach((btn) => {
+      btn.addEventListener("click", async (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const action = btn.getAttribute("data-action");
+        const id = btn.getAttribute("data-id");
+        if (!id) return;
+        if (action === "open") return openDetails(id);
+        if (action === "edit") return openEdit(id);
+        if (action === "delete") return onDelete(id);
+        if (action === "status") return onStatus(id, btn.getAttribute("data-status"));
+      });
+    });
+
+    ticketsGrid.querySelectorAll(".ticket-card").forEach((card) => {
+      card.addEventListener("click", (ev) => {
+        if (ev.target.closest("button") || ev.target.closest("a")) return;
+        const id = card.getAttribute("data-id");
+        if (id) openDetails(id);
+      });
+    });
+
+    try { lucide.createIcons(); } catch {}
+  }
+
+  function renderCard(t) {
+    const urgent = !!t.urgente;
+    const solicitante = (t.solicitante && (t.solicitante.nome || t.solicitante.email)) || t.solicitanteAberto || "-";
+    const responsavel = (t.responsavel && (t.responsavel.nome || t.responsavel.email)) || "-";
+    const prazo = (t.prazoDias ?? "-");
+    const anexosCount = Array.isArray(t.anexos) ? t.anexos.length : 0;
+
+    return `
+      <div class="ticket-card ${urgent ? "is-urgent" : ""}" data-id="${t._id}">
+        <div class="ticket-head">
+          <div class="d-flex align-items-center gap-2">
+            <span class="badge badge-status">${escapeHtml(t.status || "-")}</span>
+            ${urgent ? `<span class="urgent-chip"><i data-lucide="clock" style="width:14px;height:14px;"></i> Urgente</span>` : ``}
           </div>
-        </td>
-        <td>${badgeStatus(t.status)}</td>
-        <td>${esc(t.prioridade)}</td>
-        <td>${badgeUrgente(!!t.urgente)}</td>
-        <td>${esc(t.responsavel?.nome || "—")}</td>
-        <td>${esc(t.setor?.nome || "—")}</td>
-        <td class="text-end">
-          <div class="d-flex justify-content-end gap-2 flex-wrap">
-
-            <button class="btn btn-outline-secondary btn-sm" style="border-radius:12px;"
-              data-action="details" data-id="${t._id}">
+          <div class="ticket-actions">
+            <button class="icon-btn" data-action="open" data-id="${t._id}" title="Abrir">
               <i data-lucide="maximize-2" style="width:16px;height:16px;"></i>
             </button>
-
-            <button class="btn btn-outline-secondary btn-sm" style="border-radius:12px;"
-              data-action="edit" data-id="${t._id}">
+            <button class="icon-btn" data-action="edit" data-id="${t._id}" title="Editar">
               <i data-lucide="pencil" style="width:16px;height:16px;"></i>
             </button>
-
-            <div class="dropdown">
-              <button class="btn btn-outline-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown" style="border-radius:12px;">
-                Status
-              </button>
-              <ul class="dropdown-menu">
-                ${STATUS.map(s => `
-                  <li><a class="dropdown-item" href="#" data-action="quickStatus" data-id="${t._id}" data-status="${esc(s)}">${esc(s)}</a></li>
-                `).join("")}
-              </ul>
-            </div>
-
-            <button class="btn btn-outline-danger btn-sm" style="border-radius:12px;"
-              data-action="delete" data-id="${t._id}" data-name="${esc(t.titulo)}">
+            <button class="icon-btn danger" data-action="delete" data-id="${t._id}" title="Excluir">
               <i data-lucide="trash-2" style="width:16px;height:16px;"></i>
             </button>
           </div>
-        </td>
-      </tr>
-    `).join("");
-
-    if (window.lucide) window.lucide.createIcons();
-  } catch (err) {
-    if (err.status === 401 || err.status === 403) {
-      API.clearAuth();
-      window.location.href = "/admin/login.html";
-      return;
-    }
-    showAlert("pageAlert", "danger", `<strong>Erro:</strong> ${esc(err.message || "Falha ao carregar")}`);
-    tbody.innerHTML = `<tr><td colspan="7" style="color:var(--muted);">Erro ao carregar</td></tr>`;
-  }
-}
-
-async function fetchTicket(id) {
-  return API.request(`/api/tickets/${id}`, { method: "GET" });
-}
-
-async function openEdit(id) {
-  const t = await fetchTicket(id);
-  document.getElementById("ticketId").value = t._id;
-  document.getElementById("modalTitle").textContent = "Editar chamado";
-  document.getElementById("titulo").value = t.titulo || "";
-  document.getElementById("descricao").value = t.descricao || "";
-  document.getElementById("prioridade").value = t.prioridade || "Média";
-  document.getElementById("urgente").value = String(!!t.urgente);
-  document.getElementById("status").value = t.status || "Pendente";
-  document.getElementById("dataInicio").value = new Date(t.dataInicio).toISOString().slice(0,10);
-  document.getElementById("dataFim").value = new Date(t.dataFim).toISOString().slice(0,10);
-  document.getElementById("responsavel").value = t.responsavel?._id || "";
-  document.getElementById("setor").value = t.setor?._id || "";
-  showAlert("modalAlert", "", "");
-  modalTicket.show();
-}
-
-async function saveTicket() {
-  const id = document.getElementById("ticketId").value;
-  const titulo = document.getElementById("titulo").value.trim();
-  const descricao = document.getElementById("descricao").value.trim();
-  const prioridade = document.getElementById("prioridade").value;
-  const status = document.getElementById("status").value;
-  const urgente = document.getElementById("urgente").value === "true";
-  const dataInicio = document.getElementById("dataInicio").value;
-  const dataFim = document.getElementById("dataFim").value;
-  const responsavel = document.getElementById("responsavel").value;
-  const setor = document.getElementById("setor").value || null;
-
-  if (!titulo) return showAlert("modalAlert", "warning", "Informe o <strong>título</strong>.");
-  if (!descricao) return showAlert("modalAlert", "warning", "Informe a <strong>descrição</strong>.");
-  if (!responsavel) return showAlert("modalAlert", "warning", "Selecione o <strong>responsável</strong>.");
-  if (!dataInicio || !dataFim) return showAlert("modalAlert", "warning", "Informe as <strong>datas</strong>.");
-
-  setSaving(true);
-  try {
-    const body = { titulo, descricao, prioridade, status, urgente, dataInicio, dataFim, responsavel, setor };
-
-    if (!id) {
-      await API.request("/api/tickets", { method: "POST", body });
-      showAlert("pageAlert", "success", "Chamado criado com sucesso.");
-    } else {
-      await API.request(`/api/tickets/${id}`, { method: "PUT", body });
-      showAlert("pageAlert", "success", "Chamado atualizado com sucesso.");
-    }
-
-    modalTicket.hide();
-    await loadTable();
-  } catch (err) {
-    if (err.status === 401 || err.status === 403) {
-      API.clearAuth();
-      window.location.href = "/admin/login.html";
-      return;
-    }
-    showAlert("modalAlert", "danger", esc(err.message || "Erro ao salvar"));
-  } finally {
-    setSaving(false);
-  }
-}
-
-async function quickStatus(id, status) {
-  try {
-    await API.request(`/api/tickets/${id}/status`, { method: "PATCH", body: { status } });
-    await loadTable();
-  } catch (err) {
-    showAlert("pageAlert", "danger", esc(err.message || "Erro ao alterar status"));
-  }
-}
-
-function openDelete(id, name) {
-  document.getElementById("delId").value = id;
-  document.getElementById("delName").textContent = name || "—";
-  modalDelete.show();
-}
-
-async function confirmDelete() {
-  const id = document.getElementById("delId").value;
-  try {
-    await API.request(`/api/tickets/${id}`, { method: "DELETE" });
-    modalDelete.hide();
-    showAlert("pageAlert", "success", "Chamado excluído com sucesso.");
-    await loadTable();
-  } catch (err) {
-    showAlert("pageAlert", "danger", esc(err.message || "Erro ao excluir"));
-  }
-}
-
-function renderChat(t) {
-  const box = document.getElementById("chatBox");
-  const updates = t.atualizacoes || [];
-  if (!updates.length) {
-    box.innerHTML = `<div style="color:var(--muted); font-size:13px;">Nenhuma atualização ainda.</div>`;
-    return;
-  }
-
-  box.innerHTML = updates.map(u => {
-    const dt = new Date(u.createdAt).toLocaleString();
-    const autor = u.autor?.nome || "—";
-    const anexo = u.anexo ? `<div style="margin-top:6px; font-size:12px;"><strong>Anexo:</strong> ${esc(u.anexo)}</div>` : "";
-    return `
-      <div class="soft-card-sm p-2 mb-2">
-        <div style="display:flex; justify-content:space-between; gap:10px;">
-          <div style="font-weight:800;">${esc(autor)}</div>
-          <div style="color:var(--muted); font-size:12px;">${esc(dt)}</div>
         </div>
-        <div style="margin-top:6px;">${esc(u.mensagem)}</div>
-        ${anexo}
+
+        <div class="ticket-title">${escapeHtml(t.titulo || "Sem título")}</div>
+        <div class="ticket-desc">${escapeHtml(t.descricao || "").slice(0, 220)}${(t.descricao || "").length > 220 ? "…" : ""}</div>
+
+        <div class="ticket-meta">
+          <div><span class="k">Solicitante:</span> ${escapeHtml(solicitante)}</div>
+          <div><span class="k">Responsável:</span> ${escapeHtml(responsavel)}</div>
+        </div>
+
+        <div class="ticket-foot">
+          <div class="d-flex align-items-center gap-2">
+            <span class="muted"><i data-lucide="calendar" style="width:14px;height:14px;"></i> ${fmtDate(t.createdAt)}</span>
+            <span class="muted"><i data-lucide="hourglass" style="width:14px;height:14px;"></i> Prazo: ${escapeHtml(String(prazo))} dia(s)</span>
+            <span class="muted"><i data-lucide="paperclip" style="width:14px;height:14px;"></i> ${anexosCount}</span>
+          </div>
+
+          <div class="d-flex gap-1 flex-wrap">
+            ${statusButton(t._id, "Pendente")}
+            ${statusButton(t._id, "Em Andamento")}
+            ${statusButton(t._id, "Aguardando Responsável")}
+            ${statusButton(t._id, "Aguardando Solicitante")}
+            ${statusButton(t._id, "Concluído")}
+          </div>
+        </div>
       </div>
     `;
-  }).join("");
-
-  box.scrollTop = box.scrollHeight;
-}
-
-async function openDetails(id) {
-  currentDetailsId = id;
-  const t = await fetchTicket(id);
-
-  document.getElementById("detailsTitle").textContent = t.titulo || "Detalhes do chamado";
-  document.getElementById("detailsMeta").textContent =
-    `Status: ${t.status} • Prioridade: ${t.prioridade} • Urgente: ${t.urgente ? "Sim" : "Não"}`;
-
-  document.getElementById("detailsInfo").innerHTML = `
-    <div><strong>Descrição:</strong> ${esc(t.descricao)}</div>
-    <div class="mt-2"><strong>Responsável:</strong> ${esc(t.responsavel?.nome || "—")} (${esc(t.responsavel?.email || "")})</div>
-    <div class="mt-1"><strong>Setor:</strong> ${esc(t.setor?.nome || "—")}</div>
-    <div class="mt-1"><strong>Início:</strong> ${new Date(t.dataInicio).toLocaleDateString()} • <strong>Fim:</strong> ${new Date(t.dataFim).toLocaleDateString()}</div>
-  `;
-
-  // quick status
-  const qs = document.getElementById("quickStatus");
-  qs.innerHTML = STATUS.map(s => `<option value="${esc(s)}" ${s===t.status?"selected":""}>${esc(s)}</option>`).join("");
-
-  renderChat(t);
-
-  document.getElementById("msg").value = "";
-  document.getElementById("anexo").value = "";
-
-  showAlert("detailsAlert", "", "");
-  modalDetails.show();
-
-  if (window.lucide) window.lucide.createIcons();
-}
-
-async function sendUpdate() {
-  const msg = document.getElementById("msg").value.trim();
-  const anexo = document.getElementById("anexo").value.trim();
-  if (!msg) return showAlert("detailsAlert", "warning", "Escreva uma mensagem.");
-
-  try {
-    const t = await API.request(`/api/tickets/${currentDetailsId}/updates`, {
-      method: "POST",
-      body: { mensagem: msg, anexo: anexo || null }
-    });
-    document.getElementById("msg").value = "";
-    document.getElementById("anexo").value = "";
-    renderChat(t);
-  } catch (err) {
-    showAlert("detailsAlert", "danger", esc(err.message || "Erro ao enviar atualização"));
   }
-}
 
-(function init() {
-  validateTokenOrRedirect();
-  mountSidebar("chamados");
-  showTopbarModule("Chamados");
-  setupSidebarToggle();
+  function statusButton(id, status) {
+    return `<button class="mini-btn" data-action="status" data-id="${id}" data-status="${escapeHtml(status)}" type="button">${escapeHtml(status)}</button>`;
+  }
 
-  modalTicket = new bootstrap.Modal(document.getElementById("modalTicket"));
-  modalDetails = new bootstrap.Modal(document.getElementById("modalDetails"));
-  modalDelete = new bootstrap.Modal(document.getElementById("modalDelete"));
+  function openCreate() {
+    CURRENT_ID = null;
+    if (modalTicketTitle) modalTicketTitle.textContent = "Novo chamado";
+    if (createErr) createErr.classList.add("d-none");
+    if (ticketForm) ticketForm.reset();
+    if (selectedFiles) selectedFiles.innerHTML = `<span class="text-muted">Nenhum arquivo selecionado.</span>`;
+    if (fStatus) fStatus.value = "Pendente";
+    if (fUrgente) fUrgente.value = "false";
+    if (fPrazoDias) fPrazoDias.value = "";
+    modalTicket.show();
+    try { lucide.createIcons(); } catch {}
+  }
 
-  // selects
-  fillStatusSelect("filterStatus", true);
-  fillStatusSelect("status", false);
+  async function openEdit(id) {
+    try {
+      const t = await API.request(`/api/tickets/${id}`);
+      CURRENT_ID = t._id;
+      if (modalTicketTitle) modalTicketTitle.textContent = "Editar chamado";
+      if (createErr) createErr.classList.add("d-none");
 
-  // quick status button in details
-  document.getElementById("btnQuickStatus").addEventListener("click", async () => {
-    const status = document.getElementById("quickStatus").value;
-    await quickStatus(currentDetailsId, status);
-    // recarrega detalhes
-    await openDetails(currentDetailsId);
-  });
+      fTitulo && (fTitulo.value = t.titulo || "");
+      fSolicitanteAberto && (fSolicitanteAberto.value = t.solicitanteAberto || "");
+      fDescricao && (fDescricao.value = t.descricao || "");
+      fStatus && (fStatus.value = t.status || "Pendente");
+      fUrgente && (fUrgente.value = String(!!t.urgente));
+      fPrazoDias && (fPrazoDias.value = (t.prazoDias ?? ""));
 
-  document.getElementById("btnSendUpdate").addEventListener("click", sendUpdate);
+      fSolicitanteId && (fSolicitanteId.value = (t.solicitante && t.solicitante._id) ? t.solicitante._id : (t.solicitanteId || ""));
+      fResponsavelId && (fResponsavelId.value = (t.responsavel && t.responsavel._id) ? t.responsavel._id : (t.responsavelId || ""));
+      fSetorId && (fSetorId.value = (t.setor && t.setor._id) ? t.setor._id : (t.setorId || ""));
 
-  document.getElementById("btnOpenCreate").addEventListener("click", async () => {
-    resetTicketModal();
-    await loadModalOptions();
-    if (window.lucide) window.lucide.createIcons();
-  });
+      if (fFiles) fFiles.value = "";
+      if (selectedFiles) selectedFiles.innerHTML = `<span class="text-muted">Você pode anexar mais arquivos ao salvar.</span>`;
 
-  document.getElementById("btnSave").addEventListener("click", saveTicket);
-  document.getElementById("btnConfirmDelete").addEventListener("click", confirmDelete);
-
-  document.getElementById("btnApply").addEventListener("click", loadTable);
-  document.getElementById("btnRefresh").addEventListener("click", loadTable);
-  document.getElementById("btnClear").addEventListener("click", () => {
-    document.getElementById("search").value = "";
-    document.getElementById("filterStatus").value = "";
-    document.getElementById("filterUrgente").value = "";
-    document.getElementById("filterSetor").value = "";
-    document.getElementById("filterResp").value = "";
-    loadTable();
-  });
-
-  // ações da tabela
-  document.getElementById("tblBody").addEventListener("click", async (e) => {
-    const btn = e.target.closest("[data-action]");
-    if (!btn) return;
-
-    const action = btn.getAttribute("data-action");
-    const id = btn.getAttribute("data-id");
-
-    if (action === "details") return openDetails(id);
-    if (action === "edit") {
-      await loadModalOptions();
-      return openEdit(id);
+      modalTicket.show();
+      try { lucide.createIcons(); } catch {}
+    } catch (e) {
+      setAlert("danger", e.message || "Falha ao abrir chamado.");
     }
-    if (action === "delete") return openDelete(id, btn.getAttribute("data-name"));
-    if (action === "quickStatus") {
-      e.preventDefault();
-      const status = btn.getAttribute("data-status");
-      return quickStatus(id, status);
+  }
+
+  async function openDetails(id) {
+    try {
+      const t = await API.request(`/api/tickets/${id}`);
+      if (!detailsBody) return;
+      const solicitante = (t.solicitante && (t.solicitante.nome || t.solicitante.email)) || t.solicitanteAberto || "-";
+      const responsavel = (t.responsavel && (t.responsavel.nome || t.responsavel.email)) || "-";
+      const setor = (t.setor && (t.setor.nome || t.setor.titulo)) || "-";
+      const anexos = Array.isArray(t.anexos) ? t.anexos : [];
+
+      detailsBody.innerHTML = `
+        <div class="details-grid">
+          <div class="details-item"><div class="lbl">Título</div><div class="val">${escapeHtml(t.titulo || "-")}</div></div>
+          <div class="details-item"><div class="lbl">Solicitante (aberto)</div><div class="val">${escapeHtml(t.solicitanteAberto || "-")}</div></div>
+          <div class="details-item"><div class="lbl">Solicitante</div><div class="val">${escapeHtml(solicitante)}</div></div>
+          <div class="details-item"><div class="lbl">Responsável</div><div class="val">${escapeHtml(responsavel)}</div></div>
+          <div class="details-item"><div class="lbl">Setor</div><div class="val">${escapeHtml(setor)}</div></div>
+          <div class="details-item"><div class="lbl">Status</div><div class="val">${escapeHtml(t.status || "-")}</div></div>
+          <div class="details-item"><div class="lbl">Urgente</div><div class="val">${t.urgente ? "Sim" : "Não"}</div></div>
+          <div class="details-item"><div class="lbl">Prazo (dias)</div><div class="val">${escapeHtml(String(t.prazoDias ?? "-"))}</div></div>
+          <div class="details-item wide"><div class="lbl">Descrição</div><div class="val pre">${escapeHtml(t.descricao || "-")}</div></div>
+          <div class="details-item wide">
+            <div class="lbl">Anexos (${anexos.length})</div>
+            <div class="val">
+              ${anexos.length ? anexos.map(a => `
+                <a class="attach-row" href="${escapeHtml(a.url || "#")}" target="_blank" rel="noopener">
+                  <i data-lucide="paperclip" style="width:16px;height:16px;"></i>
+                  <span>${escapeHtml(a.originalName || a.filename || "arquivo")}</span>
+                  <small class="text-muted ms-auto">${escapeHtml(a.mimeType || "")}</small>
+                </a>`).join("") : `<span class="text-muted">Sem anexos.</span>`}
+            </div>
+          </div>
+        </div>
+      `;
+      modalDetails.show();
+      try { lucide.createIcons(); } catch {}
+    } catch (e) {
+      setAlert("danger", e.message || "Falha ao abrir detalhes.");
     }
-  });
+  }
 
-  // filtros opções
-  loadSectorsFilter();
-  loadRespFilter();
+  async function onSave() {
+    try {
+      if (createErr) { createErr.classList.add("d-none"); createErr.textContent=""; }
+      const payload = {
+        titulo: (fTitulo.value || "").trim() || "Sem título",
+        solicitanteAberto: (fSolicitanteAberto && fSolicitanteAberto.value ? fSolicitanteAberto.value.trim() : ""),
+        descricao: (fDescricao.value || "").trim(),
+        status: fStatus ? fStatus.value : "Pendente",
+        urgente: fUrgente ? (fUrgente.value === "true") : false,
+        prazoDias: fPrazoDias && fPrazoDias.value !== "" ? Number(fPrazoDias.value) : undefined,
+        solicitante: (fSolicitanteId && fSolicitanteId.value) ? fSolicitanteId.value : undefined,
+        responsavel: (fResponsavelId && fResponsavelId.value) ? fResponsavelId.value : undefined,
+        setor: (fSetorId && fSetorId.value) ? fSetorId.value : undefined,
+      };
+const files = fFiles ? Array.from(fFiles.files || []) : [];
 
-  loadTable();
+      if (!CURRENT_ID) {
+        if (files.length) {
+          const fd = new FormData();
+          Object.entries(payload).forEach(([k,v]) => { if (v !== undefined) fd.append(k, String(v)); });
+          files.forEach(f => fd.append("files", f));
+          await API.upload("/api/tickets", fd, { method:"POST" });
+        } else {
+          await API.request("/api/tickets", { method:"POST", body: payload });
+        }
+      } else {
+        await API.request(`/api/tickets/${CURRENT_ID}`, { method:"PUT", body: payload });
+        if (files.length) {
+          const fd = new FormData();
+          files.forEach(f => fd.append("files", f));
+          await API.upload(`/api/tickets/${CURRENT_ID}/attachments`, fd, { method:"POST" });
+        }
+      }
 
-  // se veio do chat com ?open=<ticketId>, abre detalhes automaticamente
-  try {
-    const params = new URLSearchParams(window.location.search);
-    const openId = params.get("open");
-    if (openId) setTimeout(() => openDetails(openId).catch(() => {}), 250);
-  } catch {}
-  if (window.lucide) window.lucide.createIcons();
+      modalTicket.hide();
+      await loadTickets();
+      render();
+      setAlert("success", "Chamado salvo com sucesso!");
+      setTimeout(() => setAlert(null, null), 1800);
+    } catch (e) {
+      if (createErr) { createErr.textContent = e.message || "Falha ao salvar."; createErr.classList.remove("d-none"); }
+      else setAlert("danger", e.message || "Falha ao salvar.");
+    }
+  }
+
+  async function onDelete(id) {
+    if (!confirm("Excluir este chamado?")) return;
+    try {
+      await API.request(`/api/tickets/${id}`, { method:"DELETE" });
+      await loadTickets();
+      render();
+      setAlert("success", "Chamado excluído.");
+      setTimeout(() => setAlert(null, null), 1500);
+    } catch (e) {
+      setAlert("danger", e.message || "Falha ao excluir.");
+    }
+  }
+
+  async function onStatus(id, status) {
+    try {
+      await API.request(`/api/tickets/${id}/status`, { method:"PATCH", body:{ status } });
+      await loadTickets();
+      render();
+    } catch (e) {
+      setAlert("danger", e.message || "Falha ao atualizar status.");
+    }
+  }
+
 })();

@@ -3,10 +3,9 @@ const ALLOWED_ROLES = ["ADMIN", "USER", "RESPONSAVEL"];
 const TICKET_STATUS = [
   "Pendente",
   "Em Andamento",
+  "Aguardando Responsável",
   "Aguardando Solicitante",
-  "Aguardando Fornecedor",
-  "Concluído",
-  "Pausado"
+  "Concluído"
 ];
 
 const TICKET_PRIORITIES = ["Baixa", "Média", "Alta"];

@@ -12,6 +12,19 @@ function isResponsavel(user) {
     return user?.role === "RESPONSAVEL";
 }
 
+
+function filesToMeta(req) {
+    const files = Array.isArray(req.files) ? req.files : [];
+    return files.map(f => ({
+        originalName: f.originalname,
+        filename: f.filename,
+        mimetype: f.mimetype,
+        size: f.size,
+        url: `/uploads/tickets/${f.filename}`,
+        uploadedAt: new Date()
+    }));
+}
+
 const list = asyncHandler(async (req, res) => {
     const me = req.user;
 
@@ -59,22 +72,42 @@ const create = asyncHandler(async (req, res) => {
     const me = req.user;
     const payload = req.body || {};
 
+    // anexos (multipart/form-data)
+    const anexos = filesToMeta(req);
+
     // ✅ USER: solicitante e responsável = ele mesmo
     if (me.role === "USER") {
         payload.solicitante = me._id;
         payload.responsavel = me._id;
 
-        if (!payload.dataInicio) payload.dataInicio = new Date().toISOString().slice(0, 10);
         if (!payload.status) payload.status = "Pendente";
+
+        // prazoDias é numérico
+        if (payload.prazoDias !== undefined && payload.prazoDias !== null && payload.prazoDias !== "") {
+            payload.prazoDias = Number(payload.prazoDias);
+        } else {
+            payload.prazoDias = null;
+        }
+
+        payload.anexos = anexos;
 
         const created = await ticketService.create(payload);
         return res.status(201).json(created);
     }
 
-    // ADMIN: pode criar como quiser
+    // ADMIN: pode criar com quem quiser
     if (me.role === "ADMIN") {
         if (!payload.solicitante) payload.solicitante = me._id;
         if (!payload.responsavel) payload.responsavel = me._id; // opcional: padrão
+
+        if (payload.prazoDias !== undefined && payload.prazoDias !== null && payload.prazoDias !== "") {
+            payload.prazoDias = Number(payload.prazoDias);
+        } else {
+            payload.prazoDias = null;
+        }
+
+        payload.anexos = anexos;
+
         const created = await ticketService.create(payload);
         return res.status(201).json(created);
     }
@@ -83,6 +116,25 @@ const create = asyncHandler(async (req, res) => {
     throw new HttpError(403, "Somente USER ou ADMIN pode abrir chamado nesta fase");
 });
 
+
+
+const addAttachments = asyncHandler(async (req, res) => {
+    const me = req.user;
+    const anexos = filesToMeta(req);
+    if (!anexos.length) throw new HttpError(400, "Envie ao menos 1 arquivo");
+
+    // pode anexar: ADMIN ou USER (somente se for solicitante) ou RESPONSAVEL (somente se for responsável)
+    const t = await ticketService.getById(req.params.id);
+    const isMineUser = me.role === "USER" && String(t.solicitante?._id || t.solicitante) === String(me._id);
+    const isMineResp = me.role === "RESPONSAVEL" && String(t.responsavel?._id || t.responsavel) === String(me._id);
+
+    if (me.role !== "ADMIN" && !isMineUser && !isMineResp) {
+        throw new HttpError(403, "Você não pode anexar arquivos nesse chamado");
+    }
+
+    const updated = await ticketService.addAttachments(req.params.id, anexos);
+    res.json(updated);
+});
 
 const update = asyncHandler(async (req, res) => {
     const me = req.user;
@@ -99,9 +151,16 @@ const updateStatus = asyncHandler(async (req, res) => {
     const { status } = req.body || {};
     if (!status) throw new HttpError(400, "Informe o status");
 
-    // ADMIN (e opcional: RESPONSAVEL)
-    if (!isAdmin(me) && !isResponsavel(me)) {
-        throw new HttpError(403, "Você não pode alterar status nesta fase");
+    // ADMIN/RESPONSAVEL/USER (USER somente nos próprios chamados)
+    if (!isAdmin(me) && !isResponsavel(me) && !isUser(me)) {
+        throw new HttpError(403, "Você não pode alterar status");
+    }
+
+    // se USER, só pode alterar se for solicitante
+    if (isUser(me)) {
+        const t = await ticketService.getById(req.params.id);
+        const isMine = String(t.solicitante?._id || t.solicitante) === String(me._id);
+        if (!isMine) throw new HttpError(403, "Você não pode alterar status desse chamado");
     }
 
     // se RESPONSAVEL, só pode alterar se o ticket for dele
@@ -152,4 +211,4 @@ const addUpdate = asyncHandler(async (req, res) => {
     throw new HttpError(403, "Permissão insuficiente");
 });
 
-module.exports = { list, getById, create, update, updateStatus, remove, addUpdate };
+module.exports = { list, getById, create, addAttachments, update, updateStatus, remove, addUpdate };

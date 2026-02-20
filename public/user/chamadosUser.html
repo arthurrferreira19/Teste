@@ -1,256 +1,168 @@
 <!doctype html>
 <html lang="pt-br">
-
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Maximum Help • Meus Chamados</title>
+  <title>Maximum Help • Chamados</title>
 
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="../assets/css/style.css" />
+  <link rel="stylesheet" href="/assets/css/style.css" />
 </head>
 
 <body>
   <div class="admin-shell">
+    <!-- Sidebar -->
     <aside class="sidebar" id="sidebar"></aside>
 
+    <!-- Main -->
     <section class="main">
+      <!-- Topbar padrão -->
       <div class="topbar fade-in">
         <div class="d-flex align-items-center gap-2">
           <button class="sidebar-toggle" id="btnSidebarToggle" type="button">
             <i data-lucide="panel-left" style="width:18px;height:18px;"></i>
-            Menu
           </button>
-          <h1 id="moduleTitle">Chamados</h1>
-          <span class="badge-accent">
-            <i data-lucide="ticket" style="width:16px;height:16px;"></i>
-            Usuário
-          </span>
+          <div class="topbar-title" id="moduleTitle">Chamados</div>
         </div>
 
-        <div class="d-flex align-items-center gap-2">
-          <button class="btn btn-outline-secondary" id="btnRefresh" style="border-radius:14px;">
-            <i data-lucide="refresh-cw" style="width:18px;height:18px;"></i>
+        <div class="topbar-actions d-flex align-items-center gap-2">
+          <button class="btn btn-outline-secondary btn-sm" id="btnRefresh" type="button">
+            <i data-lucide="refresh-cw" style="width:16px;height:16px;"></i>
+            Atualizar
           </button>
-          <button class="btn btn-accent" id="btnOpenCreate" data-bs-toggle="modal" data-bs-target="#modalTicket">
-            <i data-lucide="plus" style="width:18px;height:18px;"></i>
-            Abrir chamado
+
+          <button class="btn btn-outline-danger btn-sm" id="btnLogoutTop" type="button">
+            <i data-lucide="log-out" style="width:16px;height:16px;"></i>
+            Sair
           </button>
         </div>
       </div>
 
-      <div class="content">
-        <div id="pageAlert"></div>
+      <!-- Content (somente aqui muda) -->
+      <div class="container-fluid py-4">
+        <div id="pageAlert" class="mb-3"></div>
 
-        <div class="soft-card-sm p-3 fade-in">
-          <div class="row g-2 align-items-end">
-            <div class="col-12 col-md-6">
-              <label class="form-label" style="color:var(--muted); font-size:12px;">Buscar por título</label>
-              <div class="position-relative">
-                <i data-lucide="search" class="input-icon"></i>
-                <input id="search" class="form-control with-icon" placeholder="Ex.: Acesso, Impressora, Sistema..." />
-              </div>
+        <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
+          <div class="d-flex flex-wrap gap-2 align-items-center">
+            <!-- view toggle removido (somente lista) -->
+
+            <div class="input-group input-group-sm" style="width: 320px;">
+              <span class="input-group-text"><i data-lucide="search" style="width:16px;height:16px;"></i></span>
+              <input class="form-control" id="q" placeholder="Buscar por título, descrição, solicitante..." />
             </div>
 
-            <div class="col-12 col-md-3">
-              <label class="form-label" style="color:var(--muted); font-size:12px;">Status</label>
-              <select id="filterStatus" class="form-select"
-                style="border-radius:14px; min-height:46px; border:1px solid var(--border);">
-                <option value="">Todos</option>
-                <option value="Pendente">Pendente</option>
-                <option value="Em Andamento">Em Andamento</option>
-                <option value="Aguardando Solicitante">Aguardando Solicitante</option>
-                <option value="Aguardando Fornecedor">Aguardando Fornecedor</option>
-                <option value="Concluído">Concluído</option>
-                <option value="Pausado">Pausado</option>
-              </select>
-            </div>
+            <select class="form-select form-select-sm" id="statusFilter" style="width: 220px;">
+              <option value="">Status (todos)</option>
+            </select>
 
-            <div class="col-12 col-md-3 d-flex gap-2">
-              <button class="btn btn-outline-secondary w-100" id="btnClear"
-                style="border-radius:14px; min-height:46px;">
-                Limpar
-              </button>
-              <button class="btn btn-accent w-100" id="btnApply" style="border-radius:14px; min-height:46px;">
-                Filtrar
-              </button>
-            </div>
+            <select class="form-select form-select-sm" id="urgFilter" style="width: 190px;">
+              <option value="">Urgência (todas)</option>
+              <option value="true">Somente urgentes</option>
+              <option value="false">Somente não urgentes</option>
+            </select>
           </div>
 
-          <hr style="border-color: var(--border);" />
-
-          <div class="table-responsive">
-            <table class="table align-middle mb-0">
-              <thead>
-                <tr style="color:var(--muted); font-size:12px;">
-                  <th>Título</th>
-                  <th>Status</th>
-                  <th>Prioridade</th>
-                  <th>Urgente</th>
-                  <th>Responsável</th>
-                  <th>Prazo</th>
-                  <th class="text-end">Ações</th>
-                </tr>
-              </thead>
-              <tbody id="tblBody">
-                <tr>
-                  <td colspan="7" style="color:var(--muted);">Carregando...</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
+          <button class="btn btn-marsala" id="btnOpenCreate" type="button">
+            <i data-lucide="plus" style="width:16px;height:16px;"></i>
+            Novo chamado
+          </button>
         </div>
+
+        <!-- LISTA -->
+        <div id="listView" class="fade-in">
+          <div id="ticketsEmpty" class="empty-state d-none">
+            <div class="empty-icon"><i data-lucide="inbox" style="width:20px;height:20px;"></i></div>
+            <div class="empty-title">Nenhum chamado encontrado</div>
+            <div class="empty-sub">Crie um chamado ou ajuste os filtros.</div>
+          </div>
+
+          <div id="ticketsGrid" class="tickets-grid"></div>
+        </div>
+</div>
       </div>
     </section>
   </div>
 
-  <!-- MODAL ABRIR CHAMADO (USER) -->
+  <!-- Modal: Criar/Editar -->
   <div class="modal fade" id="modalTicket" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-centered">
-      <div class="modal-content soft-card">
-        <div class="modal-header border-0">
-          <div>
-            <h5 class="modal-title" style="font-weight:900;">Abrir chamado</h5>
-            <div style="color:var(--muted); font-size:12px;">Escolha um responsável e descreva o problema.</div>
-          </div>
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalTicketTitle">Novo chamado</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
         </div>
+        <div class="modal-body">
+          <div id="createErr" class="text-danger small mb-2 d-none"></div>
 
-        <div class="modal-body pt-0">
-          <div id="modalAlert"></div>
+          <form id="ticketForm">
+            <div class="row g-3">
+              <div class="col-12">
+                <label class="form-label">Título</label>
+                <input id="fTitulo" class="form-control" maxlength="120" placeholder="Ex: Solicitação / Problema..." />
+              </div>
 
-          <div class="row g-3">
-            <div class="col-12 col-lg-6">
-              <label class="form-label" style="color:var(--muted); font-size:12px;">Título</label>
-              <div class="position-relative">
-                <i data-lucide="text" class="input-icon"></i>
-                <input id="titulo" class="form-control with-icon" placeholder="Ex.: Não consigo acessar o sistema" />
+              <div class="col-12">
+                <label class="form-label">Solicitante (campo aberto - opcional)</label>
+                <input id="fSolicitanteAberto" class="form-control" maxlength="80" placeholder="Ex: Cliente X, Filial Y..." />
+              </div>
+
+              <div class="col-12">
+                <label class="form-label">Descrição</label>
+                <textarea id="fDescricao" class="form-control" rows="4" placeholder="Descreva com detalhes..."></textarea>
+              </div>
+
+              <div class="col-md-5">
+                <label class="form-label">Status</label>
+                <select id="fStatus" class="form-select">
+                  <option value="Pendente">Pendente</option>
+                  <option value="Em Andamento">Em Andamento</option>
+                  <option value="Aguardando Responsável">Aguardando Responsável</option>
+                  <option value="Aguardando Solicitante">Aguardando Solicitante</option>
+                  <option value="Concluído">Concluído</option>
+                </select>
+              </div>
+
+              <div class="col-md-4">
+                <label class="form-label">Urgente</label>
+                <select id="fUrgente" class="form-select">
+                  <option value="false">Não</option>
+                  <option value="true">Sim</option>
+                </select>
+              </div>
+
+              <div class="col-md-3">
+                <label class="form-label">Prazo (em dias)</label>
+                <input id="fPrazoDias" type="number" class="form-control" min="0" step="1" placeholder="Ex: 3" />
+              </div>
+
+              <div class="col-12">
+                <label class="form-label">Anexos</label>
+                <input id="fFiles" class="form-control" type="file" multiple />
+                <div class="form-text">Arquivos são salvos em <code>/uploads/tickets</code> e o banco guarda somente metadados.</div>
+                <div id="selectedFiles" class="mt-2 small text-muted"></div>
               </div>
             </div>
-
-            <div class="col-12 col-lg-3">
-              <label class="form-label" style="color:var(--muted); font-size:12px;">Prioridade</label>
-              <select id="prioridade" class="form-select"
-                style="border-radius:14px; min-height:46px; border:1px solid var(--border);">
-                <option>Baixa</option>
-                <option selected>Média</option>
-                <option>Alta</option>
-              </select>
-            </div>
-
-            <div class="col-12 col-lg-3">
-              <label class="form-label" style="color:var(--muted); font-size:12px;">Urgente?</label>
-              <select id="urgente" class="form-select"
-                style="border-radius:14px; min-height:46px; border:1px solid var(--border);">
-                <option value="false" selected>Não</option>
-                <option value="true">Sim</option>
-              </select>
-            </div>
-
-            <div class="col-12">
-              <label class="form-label" style="color:var(--muted); font-size:12px;">Descrição</label>
-              <textarea id="descricao" class="form-control" rows="4"
-                style="border-radius:14px; border:1px solid var(--border);"
-                placeholder="Explique o que está acontecendo..."></textarea>
-            </div>
-
-            <div class="col-12 col-lg-3">
-              <label class="form-label" style="color:var(--muted); font-size:12px;">Data de início</label>
-              <input id="dataInicio" type="date" class="form-control"
-                style="border-radius:14px; min-height:46px; border:1px solid var(--border);" />
-            </div>
-
-            <div class="col-12 col-lg-3">
-              <label class="form-label" style="color:var(--muted); font-size:12px;">Data de fim (prazo)</label>
-              <input id="dataFim" type="date" class="form-control"
-                style="border-radius:14px; min-height:46px; border:1px solid var(--border);" />
-            </div>
-
-            <div class="col-12 col-lg-6">
-              <div class="soft-card-sm p-3" style="height:100%;">
-                <div style="font-weight:900;">Responsável</div>
-                <div class="mt-1" style="color:var(--muted);">
-                  O responsável será automaticamente <strong>você</strong> (quem abriu o chamado).
-                </div>
-                <div class="mt-2" style="color:var(--muted); font-size:12px;">
-                  Seu setor será usado automaticamente pelo sistema.
-                </div>
-              </div>
-            </div>
-          </div>
+          </form>
         </div>
-
-        <div class="modal-footer border-0">
-          <button class="btn btn-outline-secondary" data-bs-dismiss="modal"
-            style="border-radius:14px;">Cancelar</button>
-          <button class="btn btn-accent" id="btnCreate" style="border-radius:14px;">
-            <span id="btnCreateText">Abrir chamado</span>
-            <span id="btnCreateSpin" class="spinner-border spinner-border-sm ms-2 d-none" role="status"></span>
-          </button>
+        <div class="modal-footer">
+          <button class="btn btn-outline-secondary" data-bs-dismiss="modal" type="button">Cancelar</button>
+          <button class="btn btn-marsala" id="btnSaveTicket" type="button">Salvar</button>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- MODAL DETALHES + CHAT -->
+  <!-- Modal: Detalhes -->
   <div class="modal fade" id="modalDetails" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-centered">
-      <div class="modal-content soft-card">
-        <div class="modal-header border-0">
-          <div>
-            <h5 class="modal-title" id="detailsTitle" style="font-weight:900;">Detalhes</h5>
-            <div id="detailsMeta" style="color:var(--muted); font-size:12px;"></div>
-          </div>
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Detalhes do chamado</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
         </div>
-
-        <div class="modal-body pt-0">
-          <div id="detailsAlert"></div>
-
-          <div class="row g-3">
-            <div class="col-12 col-lg-6">
-              <div class="soft-card-sm p-3">
-                <div style="font-weight:900;">Resumo</div>
-                <div id="detailsInfo" class="mt-2" style="color:var(--muted);"></div>
-              </div>
-            </div>
-
-            <div class="col-12 col-lg-6">
-              <div class="soft-card-sm p-3">
-                <div style="font-weight:900;">Atualizações</div>
-                <div style="color:var(--muted); font-size:12px;">Envie mensagens para acompanhar o atendimento</div>
-
-                <div id="chatBox" class="mt-3" style="max-height:320px; overflow:auto;"></div>
-
-                <hr style="border-color: var(--border);" />
-
-                <div class="row g-2">
-                  <div class="col-12">
-                    <textarea id="msg" class="form-control" rows="2"
-                      style="border-radius:14px; border:1px solid var(--border);"
-                      placeholder="Escreva uma atualização..."></textarea>
-                  </div>
-                  <div class="col-12 col-lg-8">
-                    <input id="anexo" class="form-control"
-                      style="border-radius:14px; min-height:46px; border:1px solid var(--border);"
-                      placeholder="Anexo (opcional) - URL ou nome do arquivo" />
-                  </div>
-                  <div class="col-12 col-lg-4 d-grid">
-                    <button class="btn btn-accent" id="btnSendUpdate" style="border-radius:14px; min-height:46px;">
-                      Enviar
-                    </button>
-                  </div>
-                </div>
-
-              </div>
-            </div>
-          </div>
-
-        </div>
-
-        <div class="modal-footer border-0">
-          <button class="btn btn-outline-secondary" data-bs-dismiss="modal" style="border-radius:14px;">Fechar</button>
+        <div class="modal-body" id="detailsBody"></div>
+        <div class="modal-footer">
+          <button class="btn btn-outline-secondary" data-bs-dismiss="modal" type="button">Fechar</button>
         </div>
       </div>
     </div>
@@ -259,10 +171,11 @@
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
-  <script src="../assets/js/api.js"></script>
-  <script src="../assets/js/userCommon.js"></script>
-  <script src="../assets/js/chamadosUser.js"></script>
-  <script src="../assets/js/partials.js"></script>
-</body>
+  <script src="/assets/js/api.js"></script>
+  <script src="/assets/js/userCommon.js"></script>
+<script src="/assets/js/chamadosUser.js"></script>
+  <script src="/assets/js/partials.js"></script>
 
+  
+</body>
 </html>
