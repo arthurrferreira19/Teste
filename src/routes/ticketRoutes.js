@@ -10,7 +10,7 @@ const router = express.Router();
 router.use(authMiddleware);
 
 // uploads/tickets
-const uploadDir = path.join(__dirname, "..", "..", "uploads", "tickets");
+const uploadDir = path.join(process.env.UPLOAD_DIR || path.join(process.cwd(), "uploads"), "tickets");
 fs.mkdirSync(uploadDir, { recursive: true });
 
 const storage = multer.diskStorage({

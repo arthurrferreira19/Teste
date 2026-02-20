@@ -30,10 +30,10 @@ app.use(
         styleSrc: ["'self'", "https://cdn.jsdelivr.net", "'unsafe-inline'"],
 
         // ✅ Scripts via CDN
-        scriptSrc: ["'self'", "https://unpkg.com", "https://cdn.jsdelivr.net"],
+        scriptSrc: ["'self'", "https://unpkg.com", "https://cdn.jsdelivr.net", "'unsafe-inline'"],
 
         // Imagens
-        imgSrc: ["'self'", "data:"],
+        imgSrc: ["'self'", "data:", "https:"],
 
         // Fontes
         fontSrc: ["'self'", "data:", "https://cdn.jsdelivr.net"],
@@ -58,7 +58,10 @@ app.use(express.static(publicPath));
 app.use("/assets", express.static(path.join(publicPath, "assets")));
 app.use("/admin", express.static(path.join(publicPath, "admin")));
 app.use("/user", express.static(path.join(publicPath, "user")));
-app.use("/uploads", express.static(path.join(__dirname, "..", "uploads")));
+const uploadsRoot = process.env.UPLOAD_DIR || path.join(__dirname, "..", "uploads");
+const fs = require("fs");
+fs.mkdirSync(uploadsRoot, { recursive: true });
+app.use("/uploads", express.static(uploadsRoot));
 
 /** (Opcional) silenciar log do Chrome DevTools */
 app.get("/.well-known/appspecific/com.chrome.devtools.json", (req, res) => res.status(204).end());

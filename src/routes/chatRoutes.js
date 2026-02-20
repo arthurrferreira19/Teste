@@ -9,7 +9,7 @@ const chatController = require("../controllers/chatController");
 const router = express.Router();
 
 // uploads/chat
-const uploadDir = path.join(__dirname, "..", "..", "uploads", "chat");
+const uploadDir = path.join(process.env.UPLOAD_DIR || path.join(process.cwd(), "uploads"), "chat");
 fs.mkdirSync(uploadDir, { recursive: true });
 
 const storage = multer.diskStorage({
