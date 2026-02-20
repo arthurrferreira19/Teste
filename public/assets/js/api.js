@@ -26,6 +26,24 @@ window.API = (function () {
     localStorage.removeItem(USER_KEY);
   }
 
+
+
+  async function upload(url, formData, { method = "POST" } = {}) {
+    const token = getToken();
+    const opts = { method, headers: {} };
+    if (token) opts.headers.Authorization = `Bearer ${token}`;
+    opts.body = formData;
+    const res = await fetch(url, opts);
+    const text = await res.text();
+    let data = null;
+    try { data = text ? JSON.parse(text) : null; } catch (e) { data = text; }
+    if (!res.ok) {
+      const msg = (data && (data.message || data.error)) ? (data.message || data.error) : `Erro ${res.status}`;
+      throw new Error(msg);
+    }
+    return data;
+  }
+
   async function request(url, { method = "GET", body = null, headers = {} } = {}) {
     const token = getToken();
 
@@ -57,5 +75,5 @@ window.API = (function () {
     return data;
   }
 
-  return { getToken, getUser, setAuth, clearAuth, request };
+  return { getToken, getUser, setAuth, clearAuth, request, upload };
 })();
